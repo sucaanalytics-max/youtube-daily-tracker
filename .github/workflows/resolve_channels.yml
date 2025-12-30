@@ -1,0 +1,28 @@
+name: Resolve YouTube Channels (ONE TIME)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - run: pip install google-api-python-client
+
+      - run: python resolve_channels_once.py
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+
+      - name: Commit channels.json
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add channels.json
+          git commit -m "Add resolved YouTube channel IDs"
+          git push
