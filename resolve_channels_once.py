@@ -25,7 +25,6 @@ channels = [
     "Yoodlee Films",
     "Saregama Kannada",
     "Saregama Haryanvi",
-    "Saregama South 24X7 Live",
     "Saregama Hindustani Classical",
     "Saregama Sufi",
     "Saregama Kids",
