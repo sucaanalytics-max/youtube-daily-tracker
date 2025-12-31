@@ -1,0 +1,31 @@
+name: Build Video Cache (One-Time)
+
+on:
+  workflow_dispatch:   # manual trigger only
+
+jobs:
+  build-cache:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install google-api-python-client
+
+      - name: Build video cache
+        run: python build_video_cache_once.py
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+
+      - name: Upload videos_cache.json as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: videos_cache
+          path: videos_cache.json
