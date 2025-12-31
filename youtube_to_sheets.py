@@ -5,68 +5,27 @@ import requests
 from datetime import date
 from googleapiclient.discovery import build
 
-# =====================
-# ENVIRONMENT VARIABLES
-# =====================
 API_KEY = os.environ.get("YOUTUBE_API_KEY")
 SHEET_WEBHOOK = os.environ.get("GOOGLE_APPS_SCRIPT_URL")
 
-if not API_KEY:
-    raise ValueError("❌ YOUTUBE_API_KEY not found")
-
-if not SHEET_WEBHOOK:
-    raise ValueError("❌ GOOGLE_APPS_SCRIPT_URL not found")
-
-# =====================
-# LOAD CHANNELS (STATIC)
-# =====================
-with open("channels.json", "r") as f:
-    CHANNELS = json.load(f)
-
-# =====================
-# YOUTUBE CLIENT
-# =====================
 youtube = build("youtube", "v3", developerKey=API_KEY)
 
-# =====================
-# FUNCTIONS
-# =====================
-def get_all_videos(playlist_id):
-    video_ids = []
-    token = None
+with open("channels.json") as f:
+    CHANNELS = json.load(f)
 
-    while True:
-        res = youtube.playlistItems().list(
-            part="contentDetails",
-            playlistId=playlist_id,
-            maxResults=50,
-            pageToken=token
-        ).execute()
-
-        for item in res["items"]:
-            video_ids.append(item["contentDetails"]["videoId"])
-
-        token = res.get("nextPageToken")
-        if not token:
-            break
-
-        time.sleep(0.2)
-
-    return video_ids
-
+with open("videos_cache.json") as f:
+    VIDEO_CACHE = json.load(f)
 
 def get_video_stats(video_ids):
-    rows = []
-
+    out = []
     for i in range(0, len(video_ids), 50):
-        batch = video_ids[i:i+50]
         res = youtube.videos().list(
             part="snippet,statistics",
-            id=",".join(batch)
+            id=",".join(video_ids[i:i+50])
         ).execute()
 
         for v in res["items"]:
-            rows.append({
+            out.append({
                 "video_id": v["id"],
                 "title": v["snippet"]["title"],
                 "published_at": v["snippet"]["publishedAt"],
@@ -74,25 +33,21 @@ def get_video_stats(video_ids):
             })
 
         time.sleep(0.2)
+    return out
 
-    return rows
-
-# =====================
-# MAIN EXECUTION
-# =====================
 today = date.today().isoformat()
 payload = []
 
-for channel_name, meta in CHANNELS.items():
-    print(f"▶ Processing: {channel_name}")
+for channel, meta in CHANNELS.items():
+    print("▶ Processing:", channel)
 
-    video_ids = get_all_videos(meta["uploads_playlist"])
+    video_ids = VIDEO_CACHE.get(channel, [])
     stats = get_video_stats(video_ids)
 
     for s in stats:
         payload.append({
             "date": today,
-            "channel": channel_name,
+            "channel": channel,
             "channel_id": meta["channel_id"],
             "video_id": s["video_id"],
             "title": s["title"],
@@ -100,7 +55,7 @@ for channel_name, meta in CHANNELS.items():
             "views": s["views"]
         })
 
-print(f"⬆️ Sending {len(payload)} rows to Google Sheets")
+print(f"⬆️ Sending {len(payload)} rows")
 
 requests.post(
     SHEET_WEBHOOK,
