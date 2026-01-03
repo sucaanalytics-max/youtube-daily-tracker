@@ -16,6 +16,8 @@ with open("channels.json") as f:
 with open("videos_cache.json") as f:
     VIDEO_CACHE = json.load(f)
 
+BATCH_SIZE = 500  # SAFE size for Apps Script
+
 def get_video_stats(video_ids):
     out = []
     for i in range(0, len(video_ids), 50):
@@ -34,6 +36,22 @@ def get_video_stats(video_ids):
 
         time.sleep(0.2)
     return out
+
+
+def post_in_batches(rows):
+    for i in range(0, len(rows), BATCH_SIZE):
+        batch = rows[i:i+BATCH_SIZE]
+        print(f"⬆️ Sending rows {i+1}–{i+len(batch)}")
+
+        requests.post(
+            SHEET_WEBHOOK,
+            headers={"Content-Type": "application/json"},
+            data=json.dumps(batch),
+            timeout=30
+        )
+
+        time.sleep(1)  # IMPORTANT: prevent Apps Script overload
+
 
 today = date.today().isoformat()
 payload = []
@@ -55,11 +73,7 @@ for channel, meta in CHANNELS.items():
             "views": s["views"]
         })
 
-print(f"⬆️ Sending {len(payload)} rows")
+print(f"📦 Total rows to send: {len(payload)}")
+post_in_batches(payload)
 
-requests.post(
-    SHEET_WEBHOOK,
-    headers={"Content-Type": "application/json"},
-    data=json.dumps(payload),
-    timeout=30
-)
+print("✅ All batches sent successfully")
