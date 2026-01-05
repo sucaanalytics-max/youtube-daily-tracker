@@ -16,10 +16,10 @@ with open("channels.json") as f:
 with open("videos_cache.json") as f:
     VIDEO_CACHE = json.load(f)
 
-BATCH_SIZE = 500  # SAFE size for Apps Script
+BATCH_SIZE = 300   # smaller = safer
 
 def get_video_stats(video_ids):
-    out = []
+    rows = []
     for i in range(0, len(video_ids), 50):
         res = youtube.videos().list(
             part="snippet,statistics",
@@ -27,43 +27,37 @@ def get_video_stats(video_ids):
         ).execute()
 
         for v in res["items"]:
-            out.append({
+            rows.append({
                 "video_id": v["id"],
                 "title": v["snippet"]["title"],
                 "published_at": v["snippet"]["publishedAt"],
                 "views": int(v["statistics"].get("viewCount", 0))
             })
-
         time.sleep(0.2)
-    return out
+    return rows
 
-
-def post_in_batches(rows):
+def post_batches(rows):
     for i in range(0, len(rows), BATCH_SIZE):
         batch = rows[i:i+BATCH_SIZE]
-        print(f"⬆️ Sending rows {i+1}–{i+len(batch)}")
-
         requests.post(
             SHEET_WEBHOOK,
             headers={"Content-Type": "application/json"},
             data=json.dumps(batch),
-            timeout=30
+            timeout=20
         )
-
-        time.sleep(1)  # IMPORTANT: prevent Apps Script overload
-
+        time.sleep(1)
 
 today = date.today().isoformat()
-payload = []
 
 for channel, meta in CHANNELS.items():
-    print("▶ Processing:", channel)
+    print(f"▶ Processing channel: {channel}")
 
     video_ids = VIDEO_CACHE.get(channel, [])
     stats = get_video_stats(video_ids)
 
+    channel_rows = []
     for s in stats:
-        payload.append({
+        channel_rows.append({
             "date": today,
             "channel": channel,
             "channel_id": meta["channel_id"],
@@ -73,7 +67,10 @@ for channel, meta in CHANNELS.items():
             "views": s["views"]
         })
 
-print(f"📦 Total rows to send: {len(payload)}")
-post_in_batches(payload)
+    print(f"⬆️ Sending {len(channel_rows)} rows for {channel}")
+    post_batches(channel_rows)
 
-print("✅ All batches sent successfully")
+    # CRITICAL pause between channels
+    time.sleep(5)
+
+print("✅ All channels sent successfully")
